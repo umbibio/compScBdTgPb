@@ -12,6 +12,8 @@
 1. `clusterCurves.R` uses the mean-trend of Marker genes and performs a time-series clustering with dynamic time warping (dtw) to cluster the curves based on their similarity of shape, taking minor stretch and shifts into consideration. The curves are used to produce heatmaps.
 
 ### Glasso
+
+To be filed
 The Seurat objects for all three species are down-sampled to contain 800 cells/cluster and 2000 most variable genes. The code `genGlassoDat.R` generates the Seurat objects, uses network smoothing to reduce sparsity (params: alpha = 0.3, inter = 0.3) and generates the empirical contrivance matrices for Tg, Pb, and Bd. The contrivance matrices are used to generate Sparse covariance, precision, and partial correlation matrices (code `glasso_slurm_array.sh` on Chimera, parameter: rho = 1:999/1000). To see the effect of network smoothing, see exploratory code `estiamteCov.R`
 
 Note: The slurm array has an upper limit of 1000 jobs, indexed by 0:1000. To scale lambda with step-size 0.0001 do:
