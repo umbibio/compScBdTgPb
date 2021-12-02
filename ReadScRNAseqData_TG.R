@@ -68,6 +68,11 @@ FeaturePlot(object = S.O.tg,
             cols = c("grey", "blue"), reduction = "pca")
 
 Tg.markers.sig <- Tg.markers %>% dplyr::filter(avg_log2FC > 1 & p_val_adj < 0.01)
+#Tg.markers.sig <- Tg.markers %>% dplyr::filter(avg_log2FC > log2(1.2) & p_val_adj < 0.01)
+
+## Manually add AP2XII-8
+Tg.markers.sig <- Tg.markers %>% dplyr::filter((avg_log2FC > 1 & p_val_adj < 0.01) | GeneID == 'TGGT1_250800')
+Tg.markers.sig[Tg.markers.sig$GeneID == 'TGGT1_250800',]
 
 saveRDS(Tg.markers.sig, '../Input/compScBdTgPb/RData/TG.markers.sig.RData')
 ss <- Tg.markers.sig %>% group_by(cluster) %>% summarise(num.DEG = n())

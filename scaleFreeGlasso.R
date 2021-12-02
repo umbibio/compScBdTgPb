@@ -272,13 +272,20 @@ tg.genes.clust$GeneID <- gsub('_', '-', tg.genes.clust$GeneID)
 bd.clust.net <- getClustSubNet(bd.opt.network, c('G1', 'S', 'M', 'C'), bd.genes.clust)
 saveRDS(bd.clust.net, '../Input/compScBdTgPb/RData/bd_clust_net.RData')
 
-tg.clust.net <- getClustSubNet(tg.opt.network, c('G1.a', 'G1.b', 'S', 'M', 'C'), tg.genes.clust)
+tg.clust.net <- getClustSubNet(tg.opt.network, c('G1', 'S', 'M', 'C'), tg.genes.clust)
 saveRDS(tg.clust.net, '../Input/compScBdTgPb/RData/tg_clust_net.RData')
 
 # define a custom color palette
 got_palette <- c("#1A5878", "#C44237", "#AD8941", "#E99093", "#50594B")
 
-p <- ggraph(tg.clust.net,layout = "stress")+
+node.size <- degree(tg.clust.net, v = V(tg.clust.net))
+g.nds <- set_vertex_attr(tg.clust.net, 'size', index = V(tg.clust.net), node.size)
+
+
+
+g.nds.filt <- induced_subgraph(g.nds, V(g.nds)[node.size > 1])
+
+p <- ggraph(g.nds.filt,layout = "stress")+
   #geom_edge_link0(aes(edge_width = weight),edge_colour = "grey66")+
   geom_edge_link0(edge_colour = "grey66")+
   geom_node_point(aes(fill = phase, size = size),shape=21)+

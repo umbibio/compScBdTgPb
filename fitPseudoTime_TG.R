@@ -56,7 +56,7 @@ p <- ggplot(pc.sds.tg, aes(x=PC_1,y=PC_2)) +
 
 plot(p)
 
-ggsave(filename="../Output/compScBdTgPb/figs/initial_pseudo_time_TG.pdf",
+ggsave(filename="../Output/compScBdTgPb/figs/initial_pseudo_time_TG2.pdf",
        plot=p,
        width = 5, height = 5,
        units = "in", # other options are "in", "cm", "mm"
@@ -77,12 +77,15 @@ Y <- Y[var.genes, ]
 pt <- sds.data$pt
 
 ## Map the pseudo-time to 0-12:20 hours 
-t <- (12 + 1/3) * ((as.numeric(pt) - min(as.numeric(pt)))/(max(as.numeric(pt)) - min(as.numeric(pt))))
+#t <- (12 + 1/3) * ((as.numeric(pt) - min(as.numeric(pt)))/(max(as.numeric(pt)) - min(as.numeric(pt))))
+t <- (6 + 1/6) * ((as.numeric(pt) - min(as.numeric(pt)))/(max(as.numeric(pt)) - min(as.numeric(pt))))
+
 sds.data$t <- t
 
 ## time-index cells in 20 min intervals and identify cells in each partition
 ## They will be considered as replicates
-time.breaks <- seq(1/3, 12 + 1/3, by = 1/3) 
+#time.breaks <- seq(1/3, 12 + 1/3, by = 1/3) 
+time.breaks <- seq(1/6, 6 + 1/6, by = 1/6) 
 time.idx <- rep(0, nrow(sds.data))
 
 ind <- which(sds.data$t <= time.breaks[1])
@@ -96,11 +99,18 @@ for(i in 2:length(time.breaks)){
 sds.data$time.idx <- time.idx
 
 ## Update the time to 20 min increments
-sds.data$t <- (time.idx) * (1/3)
+#sds.data$t <- (time.idx) * (1/3)
+sds.data$t <- (time.idx) * (1/6)
 
 sds.data <- sds.data %>%  
   group_by(time.idx) %>% mutate(rep = seq(1:n()))
 
+
+rownames(sds.data) <- sds.data$Sample
+
+## Add the new clusters as meta-data
+S.O.tg <- AddMetaData(S.O.tg, sds.data)
+saveRDS(S.O.tg, '../Input/compScBdTgPb/RData/S.O.tg.RData')
 
 
 ## Run a GAM regression of expression on the pseudo-time
@@ -108,7 +118,8 @@ sds.data <- sds.data %>%
 gam.pval <- mclapply(1:nrow(Y), function(z){
   d <- data.frame(z=as.numeric(Y[z,]), t=as.numeric(pt))
   tmp <- gam(z ~ lo(t), data=d)
-  p <- summary(tmp)[4][[1]][1,5]
+  #p <- summary(tmp)[4][[1]][1,5]
+  p <- summary(tmp)$anova$`Pr(F)`[2]
   p
 }, mc.cores = num.cores)
 
@@ -155,19 +166,14 @@ sc.tc.df <- cell.cycle.genes.df %>%
   transmute(y = log2.expr, tme = t, ind = rep, variable = GeneID)
 saveRDS(sc.tc.df, '../Input/compScBdTgPb/RData/tg_sc_tc_df.RData')
 
-## Add the new clusters as meta-data
-S.O.tg <- AddMetaData(S.O.tg, sds.data)
-
-saveRDS(S.O.tg, '../Input/compScBdTgPb/RData/S.O.tg.RData')
-
 
 sc.tc.fits <- mclapply(unique(sc.tc.df$variable),
                        function(v)
                          sme(sc.tc.df[sc.tc.df$variable==v,c("y","tme","ind")],
-                             lambda.mu = 8, lambda.v = 8), mc.cores = num.cores)
+                             lambda.mu = 6, lambda.v = 6), mc.cores = num.cores)
 
-saveRDS(object = sc.tc.fits, file = "../Input/compScBdTgPb/RData/tg_sme_fits_sc_tc_20min.RData")
-
+#saveRDS(object = sc.tc.fits, file = "../Input/compScBdTgPb/RData/tg_sme_fits_sc_tc_20min.RData")
+saveRDS(object = sc.tc.fits, file = "../Input/compScBdTgPb/RData/tg_sme_fits_sc_tc_10min.RData")
 
 
 ## Plot a few curves to check the alignments
@@ -188,8 +194,6 @@ for(v in vs){
 dev.off()
 
 
-### fit clusters
-
 
 ## Get the sme mean splines and filter to include marker genes only
 TG.markers.sig <- readRDS('../Input/compScBdTgPb/RData/TG.markers.sig.RData')
@@ -201,7 +205,7 @@ sc.tc.mus <- sc.tc.mus %>% dplyr::filter(GeneID %in% TG.markers.sig$GeneID) %>%
   as.data.frame()
 
 ## Generate the clusters
-num.clust <- 5L
+num.clust <- 8L
 
 sc.hc_dtw <- dtwClustCurves(sc.tc.mus[,2:ncol(sc.tc.mus)], nclust = num.clust)
 plot(sc.hc_dtw, type = 'sc')
@@ -242,13 +246,18 @@ sc.tc.mus.scale <- left_join(sc.tc.mus.scale, sc.hc_dtw.df, by = 'GeneID')
 sc.peak.order <- sc.tc.mus.scale %>% group_by(GeneID) %>% summarise(peak.ord = getCurvePeakLoc(t, y))
 sc.tc.mus.scale <- left_join(sc.tc.mus.scale, sc.peak.order, by = 'GeneID')
 
+TG.markers.sig$cluster <- gsub('G1.b', 'G1', gsub('G1.a', 'G1', as.character(TG.markers.sig$cluster)))
 sc.overlap <- matchClustersToPhase(sc.hc_dtw.df, TG.markers.sig)
 sc.overlap$cluster <- as.numeric(sc.overlap$cluster)
 
 sc.phase.match <- sc.overlap %>% group_by(cluster) %>% summarize(phase = markers[which.max(percent)])
 sc.tc.mus.scale <- left_join(sc.tc.mus.scale, sc.phase.match, by = 'cluster')
 
-sc.tc.mus.scale$phase <- factor(sc.tc.mus.scale$phase, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
+sc.tc.mus.scale$phase <- factor(sc.tc.mus.scale$phase, levels = c('G1', 'S', 'M', 'C'))
+
+#sc.tc.mus.scale$phase <- factor(sc.tc.mus.scale$phase, levels = c('G1.a','G1.b', 'S', 'M', 'C'))
+
+
 p2 <- ggplot(sc.tc.mus.scale, aes(x = t, y = reorder_within(GeneID, -peak.ord, phase), fill = y)) + 
   geom_tile() + 
   #scale_x_discrete(expand=c(0,0)) +
@@ -271,15 +280,15 @@ p2 <- ggplot(sc.tc.mus.scale, aes(x = t, y = reorder_within(GeneID, -peak.ord, p
 plot(p2)  
 
 
-ggsave(filename="../Output/compScBdTgPb/figs/tg_curve_cluster_heatmap_sc.pdf",
+ggsave(filename="../Output/compScBdTgPb/figs/tg_curve_cluster_heatmap_scg_g1a_g1b.png",
        plot=p2,
-       width = 5, height = 5,
+       width = 4, height = 4,
        units = "in", # other options are "in", "cm", "mm"
-       dpi = 300
+       dpi = 600
 )
 
 sc.overlap$cluster <- factor(sc.overlap$cluster, levels = c(5, 4, 3, 2, 1))
-sc.overlap$markers <- factor(sc.overlap$markers, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
+sc.overlap$markers <- factor(sc.overlap$markers, levels = c('G1', 'S', 'M', 'C'))
 
 p3 <- ggplot(sc.overlap, aes(x = cluster, y = markers, fill = percent)) + 
   geom_tile() + 
@@ -305,6 +314,6 @@ saveRDS(sc.tc.mus, '../Input/compScBdTgPb/RData/tg_sc.tc.mus.RData')
 saveRDS(sc.tc.mus.scale, '../Input/compScBdTgPb/RData/tg_sc.tc.mus.scale.RData')
 
 
+### Calculate transition times
 
-
-
+tmp <- sc.tc.mus.scale %>% ungroup() %>% group_by(phase) %>% summarise(mean.peak = median(peak.ord))

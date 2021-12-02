@@ -53,7 +53,7 @@ bdiv.pheno$NAME <- paste(bdiv.pheno$cells,
 
 colnames(bdiv.pheno) <- c('Sample', 'spp', 'cluster', 'cells', 'NAME')
 
-bd.ind <- match(colnames(bd.expr), bdiv.pheno$X)
+bd.ind <- match(colnames(bd.expr), bdiv.pheno$Sample)
 colnames(bd.expr) <- bdiv.pheno$NAME[bd.ind]
 
 ## down-sample the data to make it more manageable
@@ -74,5 +74,22 @@ BD.markers.sig <- BD.markers %>% dplyr::filter(avg_log2FC > 1 & p_val_adj < 0.01
 
 saveRDS(BD.markers.sig, '../Input/compScBdTgPb/RData/BD.markers.sig.RData')
 ss <- BD.markers.sig %>% group_by(cluster) %>% summarise(num.DEG = n())
+print(ss)
+
+ss$cluster <- factor(ss$cluster, levels = c('0', '1', '2', '3'))
+p <- ggplot(data=ss, aes(x=cluster, y=num.DEG)) +
+  geom_bar(stat="identity", fill="steelblue")+
+  geom_text(aes(label=num.DEG), vjust=1.6, color="black", size=5)+
+  theme_minimal()
+
+plot(p)
+
+ggsave(filename="../Output/compScBdTgPb/figs/bd_deg_numbers.pdf",
+       plot=p,
+       width = 8, height = 6,
+       units = "in", # other options are "in", "cm", "mm"
+       dpi = 300
+)
+
 print(ss)
 

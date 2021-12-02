@@ -64,7 +64,7 @@ DNA.binding.Kin.Phos.present <- rbind(DNA.binding.present, Kin.present, Phos.pre
 write.xlsx(DNA.binding.Kin.Phos.present, '../Output/compScBdTgPb/tables/tg_DNA_binding_Kin_Phos_network_degree_091321.xlsx') 
 
 
-top.ROPs <- unique(DNA.binding.KinPhos.present$GeneID[grep('ROP', DNA.binding.KinPhos.present$ProductDescription)])[1:10]
+top.ROPs <- unique(DNA.binding.Kin.Phos.present$GeneID[grep('ROP', DNA.binding.Kin.Phos.present$ProductDescription)])[1:10]
 
 ROP.net <- getNetFromVert(tg.clust.net, top.ROPs)
 ROP.edge.list <- getEdgeList(ROP.net, tg.prod.desc)
@@ -95,6 +95,30 @@ ggsave(filename="../Output/compScBdTgPb/figs/bd_egress_clust4_network.pdf",
        dpi = 300
 )
 
+
+
+# define a custom color palette
+top.all <- unique(DNA.binding.Kin.Phos.present$GeneID)
+
+all.net <- getNetFromVert(tg.clust.net, top.all)
+all.edge.list <- getEdgeList(all.net, tg.prod.desc)
+
+
+got_palette <- c("#1A5878", "#C44237", "#AD8941", "#E99093", "#50594B")
+
+p <- ggraph(all.net,layout = "stress") +
+  #geom_edge_link0(aes(edge_width = weight),edge_colour = "grey66")+
+  geom_edge_link0(edge_colour = "grey66")+
+  geom_node_point(aes(fill = phase, size = 3),shape=21)+
+  geom_node_text(aes(filter = size > 6, label = name),family="serif")+
+  scale_fill_manual(values = got_palette)+
+  scale_edge_width(range = c(0.2,3))+
+  scale_size(range = c(1,6))+
+  theme_graph()+
+  theme_graph(base_family = 'Helvetica') +
+  theme(legend.position = "right")
+
+plot(p)
 
 
 

@@ -32,25 +32,6 @@ plasmodium.10x.pheno.file <- 'pb10xIDC_pheno.csv'
 input.dir.bdiv <- "../Input/scRNAseqBdiv/"
 bdiv.count.file <- "bdiv.expr.csv"
 
-## Gene product description
-prod.disc <- read.xlsx('../Input/orthologs/ProductDescription.xlsx')
-Ribosomal.RNA <- prod.disc$GeneID[grep('ribosom*',prod.disc$ProductDescription)]
-
-## Reciprocal orthologs
-GT1.Pberghei <- read.xlsx('../Input/orthologs/rec_GT1.vs.P.bergei.xlsx')
-GT1.bdiv <- read.xlsx("../Input/orthologs/rec_GT1.vs.B.divergence.xlsx")
-#bdiv.Pberghei <- read.xlsx("../Input/orthologs/rec_B.div_P.berg.xlsx")
-
-GT1.PB <- GT1.Pberghei %>% dplyr::select('query_id', contains("subject_id"))
-GT1.bdiv <- GT1.bdiv %>% dplyr::select('query_id', contains('subject_id'))
-
-GT1.pb.bd <- inner_join(GT1.Pberghei, GT1.bdiv, by = 'query_id')
-GT1.pb.bd <- GT1.pb.bd %>% dplyr::select('query_id' , contains('subject_id'))
-
-
-colnames(GT1.pb.bd) <- c('GT1', 'PB', 'bdiv')
-colnames(GT1.PB) <- c('GT1', 'PB')
-colnames(GT1.bdiv) <- c('GT1', 'bdiv')
 
 ## Filter out Ribosomal RNAs
 #GT1.pb.bd <- GT1.pb.bd %>% dplyr::filter(!(GT1 %in% Ribosomal.RNA))
