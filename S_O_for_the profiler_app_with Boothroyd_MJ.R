@@ -189,13 +189,19 @@ rownames(pb.pheno) <- paste('PBerg_', pb.pheno$X, sep = '')
 S.Os[[2]] <- AddMetaData(object = S.Os[[2]], metadata = pb.pheno)
 
 
-## BDiv_human, no pheno available. Use Seurat clusters
+## BDiv_human, trnsfer phases from Toxo
 S.Os[[3]] <- prep_S.O(S.Os[[3]])
+anchors <- FindTransferAnchors(reference = S.O.tg, query = S.Os[[3]], dims = 1:30)
+predictions <- TransferData(anchorset = anchors, refdata = S.O.tg@meta.data$phase,dims = 1:30)
+predictions$phase <- predictions$predicted.id
+S.Os[[3]] <- AddMetaData(object = S.Os[[3]], metadata = predictions)
 
-S.Os[[3]]@meta.data$phase <- S.Os[[3]]@meta.data$seurat_clusters
+
 
 ## Remerge the data with new labels (metadata)
-alldata.lab <- merge(S.Os[[1]], S.Os[2:3])
+S.Os.new.list = list(Tg_MJ = S.Os[[1]], Tg_boothroyd = S.O.tg, Pberg = S.Os[[2]], Bdiv = S.Os[[3]])
+
+alldata.lab <- merge(S.Os[[1]], S.Os.new.list[2:4])
 
 
 ### Anchoring data
@@ -207,12 +213,12 @@ S.O.list <- lapply(S.O.list, FUN = function(x) {
 })
 
 features <- SelectIntegrationFeatures(object.list = S.O.list)
-spps <- names(S.Os)
-reference_dataset <- 1
+spps <- names(S.O.list)
+reference_dataset <- 2
 anchors2 <- FindIntegrationAnchors(object.list = S.O.list, 
-                                  anchor.features = features, 
-                                  dims = 1:30)
-                                  #reference = reference_dataset)
+                                   anchor.features = features, 
+                                   dims = 1:30)
+#reference = reference_dataset)
 
 S.O.integrated <- IntegrateData(anchorset = anchors2, dims = 1:30)
 # switch to integrated assay. Make sure to set to RNA for Differential Expression
@@ -220,7 +226,7 @@ DefaultAssay(S.O.integrated) <- "integrated"
 S.O.integrated <- ScaleData(object = S.O.integrated, verbose = FALSE)
 S.O.integrated <- RunPCA(S.O.integrated, features = VariableFeatures(object = S.O.integrated))
 S.O.integrated <- FindNeighbors(S.O.integrated, dims = 1:10, reduction = 'pca')
-S.O.integrated <- FindClusters(S.O.integrated, resolution = res)
+S.O.integrated <- FindClusters(S.O.integrated, resolution = 0.2)
 S.O.integrated <- RunUMAP(S.O.integrated, dims = 1:13)
 
 
@@ -228,7 +234,7 @@ S.O.integrated <- RunUMAP(S.O.integrated, dims = 1:13)
 pcaMataData.integrated <- getPcaMetaData(S.O.integrated)
 
 
-p1  <- ggplot(pcaMataData.integrated, aes(x= UMAP_1,y=UMAP_2)) +
+p1  <- ggplot(pcaMataData.integrated, aes(x= PC_1,y=PC_2)) +
   geom_point(aes(#fill = lable.prob,
     fill = phase,
     color = phase
@@ -261,23 +267,28 @@ p1  <- ggplot(pcaMataData.integrated, aes(x= UMAP_1,y=UMAP_2)) +
 
 plot(p1)
 
-          
-           
+
+
 
 
 
 ## To match the phases in the figure 5A in he grant
-S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == 'Toxo'] <- paste('Tg', S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == 'Toxo'], sep = '-')
-S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == "BDiv"] <- paste("BDiv", S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == "BDiv"], sep = '-')
-clust1.ind <- S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == "BDiv"] == 'BDiv-1' 
-clust2.ind <- S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == "BDiv"] == 'BDiv-2' 
-S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == "BDiv"][clust1.ind] <- 'BDiv-2'
-S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == "BDiv"][clust2.ind] <- 'BDiv-1'
-Idents(S.O.integrated) <- 'phase'
+# S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == 'Toxo'] <- paste('Tg', S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == 'Toxo'], sep = '-')
+# S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == "BDiv"] <- paste("BDiv", S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == "BDiv"], sep = '-')
+# clust1.ind <- S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == "BDiv"] == 'BDiv-1' 
+# clust2.ind <- S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == "BDiv"] == 'BDiv-2' 
+# S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == "BDiv"][clust1.ind] <- 'BDiv-2'
+# S.O.integrated@meta.data$phase[S.O.integrated@meta.data$spp == "BDiv"][clust2.ind] <- 'BDiv-1'
+# Idents(S.O.integrated) <- 'phase'
 #Idents(S.O.integrated) <- 'spp'
-p <- DimPlot(S.O.integrated, reduction = "umap", 
+
+S.O.integrated@meta.data$spp[S.O.integrated@meta.data$spp == 'Tg'] <- 'Tg_Boothroyd'
+S.O.integrated@meta.data$spp[S.O.integrated@meta.data$spp == 'Toxo'] <- 'Tg'
+Idents(S.O.integrated) <- 'phase'
+
+p <- DimPlot(S.O.integrated, reduction = "pca", 
              pt.size = 1,
-             shape.by='spp',
+             split.by='spp',
              #color.by = 'spp',
              #group.by = 'phase',
              label = TRUE, repel = T, label.size = 6) + NoLegend() + 
@@ -291,12 +302,32 @@ p <- DimPlot(S.O.integrated, reduction = "umap",
 plot(p)
 
 
-ggsave(filename="../Output/compScBdTgPb/figs/Tg_Pberg_Bdiv_umap_integrated.pdf", 
-       plot=p,
-       width = 6, height = 6, 
-       units = "in", # other options are "in", "cm", "mm" 
-       dpi = 300
-)
+saveRDS(S.O.integrated, '../scExpressionProfiler_Tg_Boothroyd_MJ_PB_BD/S_O_integrated.RData')
+
+DefaultAssay(S.O.integrated) <- 'RNA'
+p <- FeaturePlot(object = S.O.integrated, features = 'TGGT1-233010', 
+                 label = T, pt.size = 1, label.size = 5, split.by = 'spp',
+                 cols = c("lightgrey", "blue"), reduction = "pca")
+ps <- lapply(1:4, function(i){
+  p <- p[[i]] +  theme_minimal() + 
+    labs(title=p[[i]]$labels$title, x ="PC1", y = "PC2") + 
+    theme(
+      plot.title = element_text(size=12, face="bold.italic"),
+      axis.title.x = element_text(size=10, face="bold"),
+      axis.title.y = element_text(size=10, face="bold")
+    )
+  
+})
+
+#S.O.list.final <- SplitObject(S.O.integrated, split.by = 'spp')
+
+
+# ggsave(filename="../Output/compScBdTgPb/figs/Tg_Pberg_Bdiv_umap_integrated.pdf", 
+#        plot=p,
+#        width = 6, height = 6, 
+#        units = "in", # other options are "in", "cm", "mm" 
+#        dpi = 300
+# )
 
 
 

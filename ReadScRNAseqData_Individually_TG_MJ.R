@@ -64,7 +64,7 @@ S.O.list <- list(intra = S.O.intra, extra = S.O.extra, crk2 = S.O.crk2, ark3 = S
 
 S.O.list <- mclapply(S.O.list, function(S.O){
   set.seed(100)
-  S.O <- subset(x = S.O, downsample = 4000)
+  S.O <- subset(x = S.O, downsample = 6000)
   
 }, mc.cores = num.cores)
 
@@ -132,6 +132,9 @@ S.Os <- mclapply(S.Os, function(S.O){
 spps <- names(S.Os)
 
 saveRDS(S.Os[[1]], '../Input/compScBdTgPb/RData/S.O.toxo_MJ_lables.RData')
+
+## For updating the APP
+saveRDS(S.Os[[1]], '../scExpressionProfiler/S_O_toxo_MJ_labels.rds')
 
 ## Test plots
 Idents(S.Os[[1]]) <- 'spp'
