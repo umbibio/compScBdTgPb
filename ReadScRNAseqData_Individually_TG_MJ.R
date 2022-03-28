@@ -124,13 +124,19 @@ S.Os <- mclapply(S.Os, function(S.O){
   anchors <- FindTransferAnchors(reference = S.O.tg, query = S.O, dims = 1:30)
   predictions <- TransferData(anchorset = anchors, refdata = S.O.tg@meta.data$phase,dims = 1:30)
   predictions$phase <- predictions$predicted.id
-  predictions$phase[which(predictions$prediction.score.max < 0.7)] <- 'NA'
+  #predictions$phase[which(predictions$prediction.score.max < 0.7)] <- 'NA'
   S.O <- AddMetaData(object = S.O, metadata = predictions)
   return(S.O)
 }, mc.cores = num.cores)
 
 spps <- names(S.Os)
 
+S.Os <- lapply(1:length(S.Os), function(i){
+  S.Os[[i]]@meta.data$spp <- spps[i]
+  S.Os[[i]]
+})
+
+saveRDS(S.Os, '../Input/compScBdTgPb/RData/S.O.intra_extra_crk2_ark3_lables_not_anchored.RData')
 saveRDS(S.Os[[1]], '../Input/compScBdTgPb/RData/S.O.toxo_MJ_lables.RData')
 
 ## For updating the APP
