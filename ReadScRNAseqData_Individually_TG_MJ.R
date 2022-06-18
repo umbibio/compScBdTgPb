@@ -196,6 +196,43 @@ pcaMetaData$spp <- factor(pcaMetaData$spp,
 
 
 
+
+
+##### Phase proportions
+
+## Proportions
+tmp <- pcaMetaData
+
+stats <- tmp %>% group_by(spp) %>% mutate(total.cells = n()) %>% 
+  ungroup() %>% group_by(spp, phase) %>% summarise(counts = n(), perc = n()/total.cells[1]) 
+
+aes(x=spp, y=perc, color = phase, group = phase)
+p3 <- ggplot(data=stats, aes(x=spp, y=perc, fill = phase)) +
+  geom_bar(stat="identity", position=position_stack(), width=0.8) +
+  geom_text(aes(label=round(perc, 2)), vjust=1.2,  color="black", 
+            size=5, fontface="bold", position=position_stack(), angle=0)+
+  #scale_fill_manual(values = c("G1" = "#ff6c67","S/M" ='#a2a700', 'C' = '#00c377')) +
+  theme_minimal() + 
+  theme(panel.spacing = unit(0.5, "lines")) + 
+  theme(axis.text.x = element_text(face="bold", size=16, angle=0)) +
+  theme(axis.text.y = element_text(face="bold", size=16, angle=0)) +
+  theme(
+    axis.title.x = element_text(size=18, face="bold"),
+    axis.title.y = element_text(size=18, face="bold")
+  ) #+  coord_flip()
+
+plot(p3)
+
+
+
+ggsave(filename="../Output/compScBdTgPb/figs/phase_proportions_intra_extra_crk2_ark3.pdf",
+       plot=p3,
+       width = 6, height = 6,
+       units = "in", # other options are "in", "cm", "mm"
+       dpi = 300
+)
+
+
 ###### Flipping plots
 
 getPlot <- function(pcaMetaData, reduction = 'umap', flip1 = 1, flip2 = 1){

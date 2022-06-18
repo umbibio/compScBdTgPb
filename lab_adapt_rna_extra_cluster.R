@@ -44,8 +44,18 @@ plot.trend <- function(gene.id, gene.name, extra.tc.logCPM){
 
 extra.tc.logCPM <- readRDS('../Input/compScBdTgPb/LabAdaptationRNA/extra_tc_logCPM.RData')
 
-gene.id <- 'TGGT1_215895'
-gene.name <- 'IX-10'
+gene.id <- 'TGGT1_268850'
+gene.name <- 'ENO2'
+
+gene.id <- 'TGGT1_268860'
+gene.name <- 'ENO1'
+
+gene.id <- "TGGT1_227290"
+gene.name <- 'MORC'
+
+gene.id <- 'TGGT1_254555'
+gene.name <- 'GCN5-A'
+
 p <- plot.trend(gene.id, gene.name, extra.tc.logCPM)
 
 plot(p)
@@ -123,17 +133,47 @@ extra.rna.dtw.long <- left_join(extra.rna.dtw.long, rna.r2, by = 'cluster')
 extra.rna.dtw.long$is.trending <- ifelse(extra.rna.dtw.long$R2 > 0.4, 'yes', 'no')
 extra.rna.dtw.long$trending <- ifelse(extra.rna.dtw.long$slope > 0, 'up', 'down')
 extra.rna.dtw.long.filt <- extra.rna.dtw.long %>% dplyr::filter(is.trending == 'yes')
+extra.rna.dtw.long.filt$trending <- factor(extra.rna.dtw.long.filt$trending, levels = c('up', 'down'))
 
-p <- ggplot(extra.rna.dtw.long, aes(x = x, y = y, group = GeneID)) + 
-  geom_line(aes(x = x, y = y, color = factor(cluster)), alpha = 0.4) + 
-  geom_smooth(aes(x = x, y = y, group = NA), method='lm', color = 'black') + theme_bw() +
-  facet_wrap(.~cluster)
+
+p <- ggplot(extra.rna.dtw.long.filt, aes(x = x, y = y, group = GeneID)) + 
+  geom_line(aes(x = x, y = y, color = trending), alpha = 0.4) + 
+  geom_smooth(aes(x = x, y = y, group = NA), method='lm', color = 'black') + 
+  theme_bw(base_size = 14) +
+  ylab('Expr') + xlab('Passage') +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
+  theme(strip.background = element_rect(colour="black", fill="white",
+                                        size=0.5, linetype="solid")) +
+  facet_grid(trending~.) + 
+  theme(
+    strip.text.x = element_text(
+      size = 14,  face = "bold.italic"
+    ),
+    strip.text.y = element_text(
+      size = 14, face = "bold.italic"
+    )
+  ) +
+  #ggtitle(titles[i]) +
+  theme(
+    plot.title = element_text(size=14, face = "bold.italic", color = 'red'),
+    axis.title.x = element_text(size=14, face="bold", hjust = 1),
+    axis.title.y = element_text(size=14, face="bold")
+  ) + 
+  theme(legend.position = "None",
+        #legend.position = c(0.88, 0.17),
+        legend.title = element_text(colour="black", size=10, 
+                                    face="bold"),
+        legend.text = element_text(colour="black", size=10, 
+                                   face="bold")) + 
+  guides(colour = guide_legend(override.aes = list(size=2)))
+
 
 plot(p)
 
 ggsave(filename="../Output/compScBdTgPb/figs/lab_adapt_trending_rna_clusters.pdf", 
        plot=p,
-       width = 8, height = 8, 
+       width = 6, height = 6, 
        units = "in", # other options are "in", "cm", "mm" 
        dpi = 300
 )

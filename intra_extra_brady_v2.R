@@ -180,8 +180,8 @@ saveRDS(S.Os, '../Input/compScBdTgPb/RData/S.O.intra_extra_pruWT_pruPH_lables_li
 
 
 ## Test plots
-Idents(S.Os[[1]]) <- 'phase'
-p <- DimPlot(S.Os[[1]], reduction = "umap", 
+Idents(S.Os[[2]]) <- 'phase'
+p <- DimPlot(S.Os[[2]], reduction = "umap", 
              #group.by = "cell", 
              #split.by = 'spp',
              pt.size = 1,
@@ -202,9 +202,11 @@ plot(p)
 SAG1.ID <- 'TGGT1-233460'
 BAG1.ID <- "TGGT1-259020"
 BFD1.ID <- "TGGT1-200385"
-new.feature <- "TGGT1-215895"
+new.feature <- "TGGT1-227290" # MORC
+new.feature <- "TGGT1-254555" # GCN5-A
+new.feature <- "TGGT1-293820"
 
-p <- FeaturePlot(S.Os[[2]], features = c(SAG1.ID, BAG1.ID, BFD1.ID, new.feature))
+p <- FeaturePlot(S.Os[[4]], features =  new.feature)
 plot(p)
 
 ggsave(filename="../Output/compScBdTgPb/figs/brady_sag1_bag1_expr.pdf", 
@@ -532,7 +534,8 @@ ggsave(filename="../Output/compScBdTgPb/figs/Tachy_Extra_Brady_total_degs.pdf",
 ## Pairwise comparisons
 ## Tachy vs Brady
 Idents(S.O.integrated.filter) <- 'stage'
-Brady.vs.Tachy.markers <- FindMarkers(S.O.integrated.filter, ident.1 = "Brady", ident.2 = "Tachy", min.pct = 0.1)
+Brady.vs.Tachy.markers <- FindMarkers(S.O.integrated.filter, ident.1 = "Brady", ident.2 = "Tachy", 
+                                      logfc.threshold = 0, min.pct = 0.0)
 Brady.vs.Tachy.markers$gene <- rownames(Brady.vs.Tachy.markers)
 Brady.vs.Tachy.markers$GeneID <- gsub('-', '_', Brady.vs.Tachy.markers$gene)
 Brady.vs.Tachy.markers.sig <- Brady.vs.Tachy.markers %>% dplyr::filter(abs(avg_log2FC) > 0.58 & p_val_adj < 0.05) 
@@ -542,7 +545,8 @@ write.xlsx(Brady.vs.Tachy.markers.sig , '../Output/compScBdTgPb/tables/Brady_vs_
 
 ## Tachy RH vs Extra RH 
 Idents(S.O.integrated.filter) <- 'spp'
-Extra.vs.Intra.RH.markers <- FindMarkers(S.O.integrated.filter, ident.1 = "extra", ident.2 = "intra", min.pct = 0.1)
+Extra.vs.Intra.RH.markers <- FindMarkers(S.O.integrated.filter, ident.1 = "extra", ident.2 = "intra", 
+                                         logfc.threshold = 0, min.pct = 0)
 Extra.vs.Intra.RH.markers$gene <- rownames(Extra.vs.Intra.RH.markers)
 Extra.vs.Intra.RH.markers$GeneID <- gsub('-', '_', Extra.vs.Intra.RH.markers$gene)
 Extra.vs.Intra.RH.markers.sig <- Extra.vs.Intra.RH.markers %>% dplyr::filter(abs(avg_log2FC) > 0.58 & p_val_adj < 0.05) 
@@ -551,6 +555,12 @@ write.xlsx(Extra.vs.Intra.RH.markers.sig , '../Output/compScBdTgPb/tables/Extra_
 
 
 ## Shared Brady/Extra markers compared to Tachy
+shared.Brady.Extra.all <- inner_join(Brady.vs.Tachy.markers, Extra.vs.Intra.RH.markers, by = 'GeneID')
+shared.Brady.Extra.all$dir <- sign(shared.Brady.Extra.all$avg_log2FC.x * shared.Brady.Extra.all$avg_log2FC.y)
+shared.Brady.Extra.all <- shared.Brady.Extra.all %>% arrange(desc(dir), avg_log2FC.x)
+colnames(shared.Brady.Extra.all) <- gsub('\\.x', '.Brady', gsub('\\.y', '.Extra', colnames(shared.Brady.Extra.all)))
+write.xlsx(shared.Brady.Extra.all, '../Output/compScBdTgPb/tables/shared_brady_extra_markers_all_genes.xlsx')
+
 shared.Brady.Extra <- inner_join(Brady.vs.Tachy.markers.sig, Extra.vs.Intra.RH.markers.sig, by = 'GeneID')
 shared.Brady.Extra$dir <- sign(shared.Brady.Extra$avg_log2FC.x * shared.Brady.Extra$avg_log2FC.y)
 shared.Brady.Extra <- shared.Brady.Extra %>% arrange(desc(dir), avg_log2FC.x)

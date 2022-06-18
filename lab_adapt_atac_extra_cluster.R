@@ -14,9 +14,47 @@ library(openxlsx)
 
 source("./util_funcs.R")
 
+plot.trend <- function(gene.id, gene.name, extra.tc.logCPM){
+  
+  tmp <- extra.tc.logCPM %>% dplyr::filter(GeneID == gene.id) %>%
+    transmute(GeneID = GeneID, x = Time, y = expr, trend.pval = trend.pval, trend.fdr = trend.fdr)
+  
+  p <- ggplot(tmp, aes(x = x, y = y)) + 
+    geom_point(aes(x = x, y = y, color = 'red')) + 
+    geom_smooth(aes(x = x, y = y), method='lm', color = 'black') + theme_bw() + 
+    ylab('Expr') + xlab('Passage') +
+    theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
+    theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
+    theme(strip.background = element_rect(colour="black", fill="white",
+                                          size=0.5, linetype="solid")) +
+    ggtitle(paste(gene.name, gene.id, sep = ':')) +
+    theme(
+      plot.title = element_text(size=14, face="bold"),
+      axis.title.x = element_text(size=14, face="bold", hjust = 1),
+      axis.title.y = element_text(size=14, face="bold")
+    ) 
+  
+  
+  return(p)
+  
+}
+
 
 
 extra.tc.logCPM <- readRDS('../Input/compScBdTgPb/LabAdaptationRNA/extra_tc_atac_logCPM.RData')
+
+gene.id <- 'TGGT1_268850'
+gene.name <- 'ENO2'
+
+gene.id <- "TGGT1_227290"
+gene.name <- 'MORC'
+
+gene.id <- 'TGGT1_254555'
+gene.name <- 'GCN5-A'
+p <- plot.trend(gene.id, gene.name, extra.tc.logCPM)
+
+plot(p)
+
 genes <- unique(extra.tc.logCPM$GeneID)
 
 
@@ -96,20 +134,49 @@ extra.atac.dtw.long <- left_join(extra.atac.dtw.long, atac.r2, by = 'cluster')
 extra.atac.dtw.long$is.trending <- ifelse(extra.atac.dtw.long$R2 > 0.4, 'yes', 'no')
 extra.atac.dtw.long$trending <- ifelse(extra.atac.dtw.long$slope > 0, 'up', 'down')
 extra.atac.dtw.long.filt <- extra.atac.dtw.long %>% dplyr::filter(is.trending == 'yes')
+extra.atac.dtw.long.filt$trending <- factor(extra.atac.dtw.long.filt$trending, levels = c('up', 'down'))
 
 p <- ggplot(extra.atac.dtw.long.filt, aes(x = x, y = y, group = GeneID)) + 
-  geom_line(aes(x = x, y = y, color = factor(cluster)), alpha = 0.4) + 
-  geom_smooth(aes(x = x, y = y, group = NA), method='lm', color = 'black') + theme_bw() +
-  facet_wrap(.~cluster)
+  geom_line(aes(x = x, y = y, color = trending), alpha = 0.4) + 
+  geom_smooth(aes(x = x, y = y, group = NA), method='lm', color = 'black') + 
+  theme_bw(base_size = 14) +
+  ylab('Access') + xlab('Passage') +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
+  theme(strip.background = element_rect(colour="black", fill="white",
+                                        size=0.5, linetype="solid")) +
+  facet_grid(trending~.) + 
+  theme(
+    strip.text.x = element_text(
+      size = 14,  face = "bold.italic"
+    ),
+    strip.text.y = element_text(
+      size = 14, face = "bold.italic"
+    )
+  ) +
+  #ggtitle(titles[i]) +
+  theme(
+    plot.title = element_text(size=14, face = "bold.italic", color = 'red'),
+    axis.title.x = element_text(size=14, face="bold", hjust = 1),
+    axis.title.y = element_text(size=14, face="bold")
+  ) + 
+  theme(legend.position = "None",
+        #legend.position = c(0.88, 0.17),
+        legend.title = element_text(colour="black", size=10, 
+                                    face="bold"),
+        legend.text = element_text(colour="black", size=10, 
+                                   face="bold")) + 
+  guides(colour = guide_legend(override.aes = list(size=2)))
+
 
 plot(p)
 
 ggsave(filename="../Output/compScBdTgPb/figs/lab_adapt_trending_atac_clusters.pdf", 
        plot=p,
-       width = 8, height = 8, 
+       width = 6, height = 6, 
        units = "in", # other options are "in", "cm", "mm" 
        dpi = 300
 )
 
 
-saveRDS(extra.atac.dtw.long, "../Input/compScBdTgPb/RData//extra_atac_dtw_trending_clusters.rds")
+saveRDS(extra.atac.dtw.long, "../Input/compScBdTgPb/RData/extra_atac_dtw_trending_clusters.rds")

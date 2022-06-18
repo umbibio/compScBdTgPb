@@ -15,33 +15,195 @@ library(princurve)
 library(parallel)
 library(sme)
 library(plotly)
+library(bigmemory)
 library(dtwclust)
 library(doParallel)
 
 
 
-source('./loadRDS.R')
 source('./util_funcs.R')
-source('./DEAsyncTimeCourse.R')
 
 
-prod.desc[grep('calcium',prod.desc$Product.Description),]
-CDPK4.id <- "Bdiv_024410"
-prod.desc[grep('GMP',prod.desc$Product.Description),]
-PKG.id <- "Bdiv_020500"
+S.O <- readRDS('../Input/compScBdTgPb/RData/S.O.toxo_MJ_lables.RData')
+sc.rna.cell.cycle.genes.df.adj <- readRDS('../Output/scClockOut/forDavid/rna_seq_gene_expr_pseudo_time.RData')
+sc.atac.cell.cycle.genes.df.adj <- readRDS('../Output/scClockOut/forDavid/atac_seq_gene_access_pseudo_time.RData')
+IMC_markers <- read.xlsx('../Input/compScBdTgPb/gene_function/IMC genes Toxoplasma.xlsx', sheet = 1)
+ME49_TGGT1  <- read.xlsx('../Input/compScBdTgPb/Orthologs/TGGT1_ME49 Orthologs.xlsx')
 
-egress_markers <- read.xlsx('../Input/BdivCellCycle/gene_function/sync_egress_kz.xlsx', sheet = 1)
-egress_markers.putative <- read.xlsx('../Input/BdivCellCycle/gene_function/sync_egress_kz.xlsx', sheet = 2)
+IMC_markers <- left_join(IMC_markers, ME49_TGGT1, by = c('Gene.ID' = 'TGGT1'))
 
-sc.tc.mus <- smoothSplineSmeFits(sc.tc.fits, unique(sc.tc.df.adj$variable), extend = F)
-colnames(sc.tc.mus) <- c('GeneID', 't', 'y')
-sc.tc.mus <- sc.tc.mus %>% dplyr::filter(GeneID %in% c(BD.markers.sig$GeneID, PKG.id) ) %>%
-  pivot_wider(names_from = 'GeneID', values_from = 'y') %>% 
+#comm.genes <- intersect(unique(sc.rna.cell.cycle.genes.df.adj$GeneID), unique(sc.rna.cell.cycle.genes.df.adj$GeneID))
+
+sc.rna.genes <- IMC_markers$TGME49[which(IMC_markers$TGME49 %in% unique(sc.rna.cell.cycle.genes.df.adj$GeneID))]
+sc.atac.genes <- IMC_markers$TGME49[which(IMC_markers$TGME49 %in% unique(sc.atac.cell.cycle.genes.df.adj$GeneID))]
+
+sc.rna.spline.fits <- lapply(1:length(sc.rna.genes), function(i){
+  tmp <- sc.rna.cell.cycle.genes.df.adj %>% dplyr::filter(GeneID == sc.rna.genes[i]) %>%
+    transmute(GeneID = GeneID, x = adj.pt, y = log2.expr)
+  sc.rna.sp <- smooth.spline(tmp$x, tmp$y, lambda = 1)
+  sc.rna.sp <- predict(sc.rna.sp, seq(0, 6, by = 1/20)) 
+  mu <- data.frame(x = sc.rna.sp$x, y = scale(sc.rna.sp$y))
+  #mu <- data.frame(x = sc.rna.sp$x, y = sc.rna.sp$y)
+  mu <- data.frame(GeneID = rep(tmp$GeneID[1], length(mu[,1])), x = mu[,1], y = mu[,2])
+  return(mu)
+})
+
+sc.rna.spline.fits <- bind_rows(sc.rna.spline.fits)
+
+sc.atac.spline.fits <- lapply(1:length(sc.atac.genes), function(i){
+  tmp <- sc.atac.cell.cycle.genes.df.adj %>% dplyr::filter(GeneID == sc.atac.genes[i]) %>%
+    transmute(GeneID = GeneID, x = adj.pt, y = log2.expr)
+  sc.atac.sp <- smooth.spline(tmp$x, tmp$y, lambda = 1)
+  sc.atac.sp <- predict(sc.atac.sp, seq(0, 6, by = 1/20)) 
+  mu <- data.frame(x = sc.atac.sp$x, y = scale(sc.atac.sp$y))
+  mu <- data.frame(GeneID = rep(tmp$GeneID[1], length(mu[,1])), x = mu[,1], y = mu[,2])
+  return(mu)
+})
+
+sc.atac.spline.fits <- bind_rows(sc.atac.spline.fits)
+
+
+
+## Clustering
+
+sc.rna.wide <- sc.rna.spline.fits %>% 
+  pivot_wider(names_from = 'GeneID', values_from = 'y') %>%
   as.data.frame()
+
+sc.atac.wide <- sc.atac.spline.fits %>% 
+  pivot_wider(names_from = 'GeneID', values_from = 'y') %>%
+  as.data.frame()
+
+
+
+
+# sc.rna.IMC <- sc.rna.wide[,colnames(sc.rna.wide) %in% IMC_markers$TGME49]
+# sc.atac.IMC <- sc.atac.wide[,colnames(sc.atac.wide) %in% IMC_markers$TGME49]
+
+sc.rna.IMC <- sc.rna.wide[,2:ncol(sc.rna.wide)]
+sc.atac.IMC <- sc.atac.wide[,2:ncol(sc.atac.wide)]
+
+
+sc.rna.IMC.markers.hc_dtw <- dtwClustCurves(sc.rna.IMC, nclust = 4L)
+sc.atac.IMC.markers.hc_dtw <- dtwClustCurves(sc.atac.IMC, nclust = 4L)
+
+plot(sc.rna.IMC.markers.hc_dtw, type = 'sc')
+plot(sc.atac.IMC.markers.hc_dtw, type = 'sc')
+
+
+## GGplot cluster graphs
+
+sc.rna.long <- sc.rna.wide %>% 
+  pivot_longer(-x, names_to = 'GeneID', values_to = 'y') %>%
+  as.data.frame()
+
+sc.rna.long <- left_join(sc.rna.long, IMC_markers, by = c('GeneID' = 'TGME49'))
+colnames(sc.rna.long) <- c('time', 'GeneID', 'normExpr', 'TGGT1', 'Name')
+
+sc.atac.long <- sc.atac.wide %>% 
+  pivot_longer(-x, names_to = 'GeneID', values_to = 'y') %>%
+  as.data.frame()
+
+sc.atac.long <- left_join(sc.atac.long, IMC_markers, by = c('GeneID' = 'TGME49'))
+colnames(sc.atac.long) <- c('time', 'GeneID', 'normExpr', 'TGGT1', 'Name')
+
+sc.rna.clust.info <- data.frame(GeneID = colnames(sc.rna.IMC), cluster = cutree(sc.rna.IMC.markers.hc_dtw, k = 4))
+sc.atac.clust.info <- data.frame(GeneID = colnames(sc.atac.IMC), cluster = cutree(sc.atac.IMC.markers.hc_dtw, k = 4))
+
+sc.rna.long.clust <- inner_join(sc.rna.long, sc.rna.clust.info, by = 'GeneID')
+sc.atac.long.clust <- inner_join(sc.atac.long, sc.atac.clust.info, by = 'GeneID')
+
+
+p1 <- lapply(unique(sc.rna.long.clust$cluster), function(i){
+  tmp <- sc.rna.long.clust %>% dplyr::filter(cluster == i)
+  ggplot(tmp, aes(x = time, y = normExpr, color = Name)) + 
+    geom_line() + theme_bw()
+})
+
+
+p <- do.call(grid.arrange, c(p1, nrow=1))
+
+ggsave(p, file = "../Output/compScBdTgPb/figs/toxo_IMC_markers_cluster_smoothed_v2.pdf.pdf",   # The directory you want to save the file in
+    width = 12, # The width of the plot in inches
+    height = 6) # The height of the plot in inches
+
+
+
+
+
+p2 <- lapply(unique(sc.atac.long.clust$cluster), function(i){
+  tmp <- sc.atac.long.clust %>% dplyr::filter(cluster == i)
+  ggplot(tmp, aes(x = time, y = normExpr, color = Name)) + 
+    geom_line() + theme_bw()
+})
+
+
+p <- do.call(grid.arrange, c(p2, nrow=2))
+
+ggsave(p, file = "../Output/compScBdTgPb/figs/toxo_atac_IMC_markers_cluster_smoothed.pdf",   # The directory you want to save the file in
+       width = 8, # The width of the plot in inches
+       height = 8) # The height of the plot in inches
+
+IMC_markers
+
+FeaturePlot(S.O, features = 'TGGT1-253470', reduction = 'pca', label = T)
+
+pdf(file = "../Output/scClockFigs/sc_egress_markers_expression_curve_clusters.pdf",   # The directory you want to save the file in
+    width = 10, # The width of the plot in inches
+    height = 5) # The height of the plot in inches
+
+
+
+
+
+##
+sc.egress.markers.tc.mus.long <- smoothSplineSmeFits(sc.tc.fits, unique(sc.tc.df.adj$variable), extend = F)
+colnames(sc.egress.markers.tc.mus.long) <- c('GeneID', 't', 'y')
+sc.egress.markers.tc.mus.long <- sc.egress.markers.tc.mus.long[sc.egress.markers.tc.mus.long$GeneID %in% egress_markers$GeneID,]
+#sc.egress.markers.tc.mus.long <- sc.egress.markers.tc.mus.long[sc.egress.markers.tc.mus.long$GeneID %in% egress_markers.putative$BdGene,]
+sc.egress.markers.tc.mus.long.stats <- sc.egress.markers.tc.mus.long %>% group_by(GeneID) %>% summarise(mean = mean(y), sd = sd(y))
+
+sc.egress.markers.tc.mus.long <- left_join(sc.egress.markers.tc.mus.long, sc.egress.markers.tc.mus.long.stats, by = 'GeneID') %>% 
+  rowwise() %>% mutate(y.st = (y - mean)/sd)
+clust.info <- data.frame(GeneID = colnames(sc.egress.markers.tc.mus), cluster = cutree(sc.egress.markers.hc_dtw, k = 5))
+
+sc.egress.markers.tc.mus.long <- inner_join(sc.egress.markers.tc.mus.long, clust.info, by = 'GeneID')
+sc.egress.markers.tc.mus.long$Name <- egress_markers$Bd_name[match(sc.egress.markers.tc.mus.long$GeneID, egress_markers$GeneID)]
+
+
+p <- lapply(unique(sc.egress.markers.tc.mus.long$cluster), function(i){
+  tmp <- sc.egress.markers.tc.mus.long %>% dplyr::filter(cluster == i)
+  ggplot(tmp, aes(x = t, y = y, color = Name)) + 
+    geom_line() + theme_bw()
+})
+
+do.call(grid.arrange, c(p, nrow=2))
+
+
+pdf(file = "../Output/scClockFigs/sc_egress_markers_expression_curve_clusters.pdf",   # The directory you want to save the file in
+    width = 10, # The width of the plot in inches
+    height = 5) # The height of the plot in inches
+
+
+
 
 ## Generate the clusters
 num.clust <- 4L
 
+
+## Generate the clusters
+num.clust <- 4L
+
+sc.rna.hc_dtws <- dtwClustCurves(sc.rna.dtw.wide[2:ncol(sc.rna.dtw.wide)], nclust = num.clust)
+plot(sc.rna.hc_dtws, type = 'sc')
+plot(sc.rna.hc_dtws, type = "series", clus = 1L)
+plot(sc.rna.hc_dtws, type = "centroids", clus = 1L)
+
+
+sc.atac.hc_dtws <- dtwClustCurves(sc.atac.dtw.wide[2:ncol(sc.atac.dtw.wide)], nclust = num.clust)
+plot(sc.atac.hc_dtws, type = 'sc')
+plot(sc.atac.hc_dtws, type = "series", clus = 1L)
+plot(sc.atac.hc_dtws, type = "centroids", clus = 1L)
 
 sc.hc_dtw <- dtwClustCurves(sc.tc.mus[,2:ncol(sc.tc.mus)], nclust = num.clust)
 

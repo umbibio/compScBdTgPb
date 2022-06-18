@@ -64,6 +64,22 @@ smooth.S.O <- function(S.O, network = T){
 }
 
 
+scale.S.O <- function(S.O){
+  S.O@meta.data$scale.id <- rownames(S.O@meta.data)
+  counts <- S.O[["RNA"]]@data
+  c.n <- colnames(counts)
+  r.n <- rownames(counts)
+  counts <- t(as.matrix(counts)) %>% as_tibble() %>% 
+    mutate_all(~ (.x  - min(.x))/(max(.x) - min(.x))) %>% as.matrix() %>% t()
+  colnames(counts) <- c.n
+  rownames(counts) <- r.n
+  
+  scale_assay <- CreateAssayObject(counts = counts)
+  S.O[["scale"]] <- scale_assay
+  
+  return(S.O)
+}
+
 fitPseudoTime <- function(S.O, reverset.time = F){
 
   num.cores <- detectCores(all.tests = FALSE, logical = TRUE)

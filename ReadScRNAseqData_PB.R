@@ -59,6 +59,8 @@ S.O.pb <- prep_S.O(S.O.pb)
 plasmodium.pheno <- plasmodium.pheno %>% dplyr::filter(Sample %in% colnames(S.O.pb))
 rownames(plasmodium.pheno) <- plasmodium.pheno$Sample
 S.O.pb <- AddMetaData(S.O.pb, plasmodium.pheno)
+Idents(S.O.pb) <- 'cells'
+saveRDS(S.O.pb, '../Input/compScBdTgPb/RData/S.O.pb.labs.rds')
 
 ## down-sample the data to make it more manageable
 set.seed(100)

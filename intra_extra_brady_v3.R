@@ -100,8 +100,12 @@ S.Os <- mclapply(S.Os, function(S.O){
 
 DimPlot(S.Os[[1]], reduction = 'umap')
 
+
+saveRDS(S.Os, '../Input/compScBdTgPb/RData/S.O.intra.extra.labs_list.rds')
+
 ## Boothroyd Pru data
-S.O.pru.list <- readRDS('../Input/compScBdTgPb/RData/S.O.tg.pru.boothroyd.list.rds')
+## Clusters 7 & 8 correspond to cluster P6
+S.O.pru.list <- readRDS('../Input/compScBdTgPb/RData/S.O.tg.pru.boothroyd.list2.rds')
 
 
 ### Merge all data
@@ -110,16 +114,23 @@ S.O.list <- list(intra = S.Os[[1]], extra = S.Os[[2]],
                  pru.d5 = S.O.pru.list$d5, pru.d7 = S.O.pru.list$d7)
 
 
+S.O.list <- mclapply(S.O.list, function(S.O){
+  set.seed(100)
+  S.O <- subset(x = S.O, downsample = 4000)
+  
+}, mc.cores = num.cores)
+
+
 ## Get common orthologous genes present in all data sets
-comm.genes <- lapply(S.O.list, function(S.O){
-  genes <- rownames(S.O@assays$RNA@data)
-})
-
-comm.genes <- Reduce(intersect, comm.genes)
-
-S.O.list <- lapply(S.O.list, function(S.O){
-  S.O <- subset(S.O, features = comm.genes)
-})
+# comm.genes <- lapply(S.O.list, function(S.O){
+#   genes <- rownames(S.O@assays$RNA@data)
+# })
+# 
+# comm.genes <- Reduce(intersect, comm.genes)
+# 
+# S.O.list <- lapply(S.O.list, function(S.O){
+#   S.O <- subset(S.O, features = comm.genes)
+# })
 
 
 
@@ -129,8 +140,9 @@ alldata <- merge(S.O.list[[1]], S.O.list[2:6], add.cell.ids=c("intra","extra","p
                                                               "pru.d5", 'pru.d7'))
 
 alldata$spp <- alldata$orig.ident
+alldata$match <- ifelse(alldata$spp %in% c('intra', 'extra'), alldata$spp, alldata$cluster)
 
-
+saveRDS(alldata, '../Input/compScBdTgPb/RData/S.O.intra_extra_pru_d0_d7_lables_list_boothroyd.RData')
 
 ## Integrate the data
 S.O.list <- SplitObject(alldata, split.by = "spp")
@@ -159,11 +171,40 @@ S.O.integrated <- FindClusters(S.O.integrated, resolution = 0.2)
 
 S.O.integrated$phase.spp <- paste(S.O.integrated@meta.data$spp, S.O.integrated@meta.data$phase, sep = "_")
 
-Idents(S.O.integrated) <- "spp"
+### Adding better spp names
+S.O.integrated@meta.data$spp2 <- ifelse(S.O.integrated@meta.data$spp == 'intra', 'RH.intra',
+                                             ifelse(S.O.integrated@meta.data$spp == 'extra', 'RH.extra',
+                                                    ifelse(S.O.integrated@meta.data$spp == 'pru.d0', 'Pru.intra',
+                                                           'Pru.brady')))
+S.O.integrated@meta.data$spp2 <- factor(S.O.integrated@meta.data$spp2, 
+                                        levels = c('RH.intra', 'RH.extra', 'Pru.intra', 'Pru.brady'))
+S.O.integrated$phase.spp2 <- paste(S.O.integrated@meta.data$spp2, S.O.integrated@meta.data$phase, sep = "_")
+Idents(S.O.integrated) <- "phase.spp2"
+
+Idents(S.O.integrated) <- "spp2"
+DimPlot(S.O.integrated, reduction = 'umap', label = T,label.size = 6) + NoLegend()
+
+## matched by looking at ids from here: http://st-atlas.org/
+## and matching the metadata renamed_clusters
+S.O.integrated$spp3 <- ifelse(S.O.integrated$match == 1, 'P3', 
+                              ifelse(S.O.integrated$match == 2, 'P4',
+                                     ifelse(S.O.integrated$match == 3, 'P4', 
+                                            ifelse(S.O.integrated$match == 4, 'P5', 
+                                                   ifelse(S.O.integrated$match == 5, 'P5',
+                                                          ifelse(S.O.integrated$match == 6, 'P5',
+                                                                 ifelse(S.O.integrated$match == 7, 'P6',
+                                                                        ifelse(S.O.integrated$match == 8, 'P6',
+                                                                               ifelse(S.O.integrated$match == 9, 'P1',
+                                                                                      ifelse(S.O.integrated$match == 'intra',
+                                                                                             'RH.intra', 'RH.extra'))))))))))
+
+
+
+Idents(S.O.integrated) <- "spp3"
 DimPlot(S.O.integrated, reduction = 'umap', label = T) + NoLegend()
 
-
-
+saveRDS(S.O.integrated, '../Input/compScBdTgPb/RData/S.O.intra.extra.pru_d0_d7.integrated_boothroyd.rds')
+## Extracting the data for control over PCA directions
 ## Extracting the data for control over PCA directions
 getPcaMetaData <- function(S.O){
   pc <- S.O@reductions$pca@cell.embeddings
@@ -174,22 +215,26 @@ getPcaMetaData <- function(S.O){
     transmute(Sample = Sample, UMAP_1 = UMAP_1, UMAP_2 = UMAP_2)
   
   meta.data <- data.frame(Sample = rownames(S.O@meta.data), 
-                          spp = S.O@meta.data$spp, phase = S.O@meta.data$phase)
+                          spp = S.O@meta.data$spp2, phase = S.O@meta.data$phase, 
+                          match = S.O@meta.data$spp3)
   meta.data <- left_join(meta.data,
                          pc, by = 'Sample')
   meta.data <- left_join(meta.data, umap, by = 'Sample')
   return(meta.data)  
 }
 
-
 pcaMataData.alldata <- getPcaMetaData(S.O.integrated)
-
 pcaMataData.alldata$phase <- factor(pcaMataData.alldata$phase, levels = c('G1.a', 'G1.b', 'S', 'M', 'C'))
+pcaMataData.alldata$spp <- factor(pcaMataData.alldata$spp, levels = c('RH.intra', 'RH.extra', 'Pru.intra', 'Pru.brady'))
+pcaMataData.alldata$match <- factor(pcaMataData.alldata$match, levels = c('RH.intra', 'RH.extra', 
+                                                              'P1', 'P2', 'P3', 'P4', 'P5', 'P6'))
 
-p1  <- ggplot(pcaMataData.alldata, aes(x= UMAP_1,y=UMAP_2)) +
+
+
+p2  <- ggplot(pcaMataData.alldata, aes(x= UMAP_1,y=UMAP_2)) +
   geom_point(aes(#fill = lable.prob,
-    fill = spp,
-    color = spp, 
+    fill = phase,
+    color = phase, 
   ), #color = 'blue', 
   alpha = 0.9,
   shape=21, size = 0.3)+ 
@@ -207,14 +252,23 @@ p1  <- ggplot(pcaMataData.alldata, aes(x= UMAP_1,y=UMAP_2)) +
   theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
   theme(strip.background = element_rect(colour="black", fill="white",
                                         size=0.5, linetype="solid")) +
-  #facet_wrap(spp~.) + 
+  facet_wrap(spp~.) + 
+  theme(
+    strip.text.x = element_text(
+      size = 14,  face = "bold.italic"
+    ),
+    strip.text.y = element_text(
+      size = 14, face = "bold.italic"
+    )
+  ) +
   #ggtitle(titles[i]) +
   theme(
     plot.title = element_text(size=14, face = "bold.italic", color = 'red'),
     axis.title.x = element_text(size=14, face="bold", hjust = 1),
     axis.title.y = element_text(size=14, face="bold")
   ) + 
-  theme(legend.position = c(0.1, 0.15),
+  theme(legend.position = "None",
+    #legend.position = c(0.14, 0.14),
         legend.title = element_text(colour="black", size=12, 
                                     face="bold"),
         legend.text = element_text(colour="black", size=12, 
@@ -222,12 +276,12 @@ p1  <- ggplot(pcaMataData.alldata, aes(x= UMAP_1,y=UMAP_2)) +
   guides(colour = guide_legend(override.aes = list(size=3)))
 
 
-plot(p1)
+plot(p2)
 
 
-ggsave(filename="../Output/compScBdTgPb/figs/intra_extra_brady_umap2.pdf", 
-       plot=p1,
-       width = 8, height = 6, 
+ggsave(filename="../Output/compScBdTgPb/figs/boothroyd/intra_extra_brady_umap_boothroyd_split.pdf", 
+       plot=p2,
+       width = 6, height = 6, 
        units = "in", # other options are "in", "cm", "mm" 
        dpi = 300
 )
@@ -248,7 +302,8 @@ my.genes <- c("TGGT1-208020",
               "TGGT1-215895",
               'TGGT1-200385',
               "TGGT1-259020",
-              'TGGT1-233460')
+              'TGGT1-233460',
+              'TGGT1-228170')
 
 
 gene.names <- c("AP2Ib-1",
@@ -263,44 +318,73 @@ gene.names <- c("AP2Ib-1",
                 "AP2IX-10",
                 "BFD1",
                 "BAG1",
-                "SAG1")
+                "SAG1",
+                'GRA44')
 
 
 #i <- 3
-i <- 9
-FeaturePlot(object = S.O.integrated, features = my.genes[i], label = F,repel = T,label.size = 6, 
+i <- 14
+p <- FeaturePlot(object = S.O.integrated, features = my.genes[i], label = F,repel = T,label.size = 6,
                  #shape.by  = 'spp',
-                 split.by = 'spp',
+                 split.by = 'spp2',
+                 ncol = 1,
                  cols = c("grey", "blue"), reduction = "umap")
-  #theme_bw(base_size = 14) +
-  #theme(legend.position = "right") +
-  #scale_fill_gradientn(colours = viridis::inferno(10)) +
-  #scale_fill_gradientn(colours = col_range(10)) +
-  #scale_fill_gradient(low = "gray66", high = "blue", midpoint = mid_point) + 
-  #scale_fill_brewer(palette = "BuPu") +
-  #ylab('UMAP2') + xlab('UMAP1') +
-  #theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
-  #theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
-  #theme(strip.background = element_rect(colour="black", fill="white",
-  #                                      size=0.5, linetype="solid")) +
-  #facet_wrap(spp~.) + 
-  #ggtitle(paste(gene.names[i], gsub('-', '_', my.genes[i]),sep = ':')) +
-  #theme(
-  #  plot.title = element_text(size=14, face="bold"),
-  #  axis.title.x = element_text(size=14, face="bold", hjust = 1),
-  #  axis.title.y = element_text(size=14, face="bold")
-  #) + 
-  #theme(legend.position = c(0.1, 0.25),
-  #      #legend.position = 'None',
-  #      legend.title = element_text(colour="black", size=6, 
-  #                                  face="bold"),
-  #      legend.text = element_text(colour="black", size=6, 
-  #                                 face="bold"))
+
+p.dat <- lapply(1:4, function(i) p[[i]]$data)
+p.dat <- bind_rows(p.dat)
+colnames(p.dat) <- c('UMAP1', 'UMAP2', 'spp', 'expr')
+g <- ggplot(data = p.dat, aes(x = UMAP1, y = UMAP2, color = expr, fill = expr)) + 
+  geom_point(aes(#fill = lable.prob,
+    #fill = expr,
+    #color = 'gray66', 
+  ), #color = 'blue', 
+  alpha = 0.9,
+  shape=21, size = 0.4)+ 
+  theme_bw(base_size = 14) +
+  scale_color_gradient2(midpoint = 0.01, low = "white", mid = "gray",
+                        high = "blue", space = "Lab" ) + 
+  scale_fill_gradient2(midpoint = 0.01, low = "white", mid = "gray",
+                        high = "blue", space = "Lab" ) + 
+  ylab('UMAP2') + xlab('UMAP1') +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1, size = 12, face="bold")) +
+  theme(strip.background = element_rect(colour="black", fill="white",
+                                        size=0.5, linetype="solid")) +
+  facet_wrap(spp~.) + 
+  theme(
+    strip.text.x = element_text(
+      size = 14,  face = "bold.italic"
+    ),
+    strip.text.y = element_text(
+      size = 14, face = "bold.italic"
+    )
+  ) +
+  
+  ggtitle(paste(gene.names[i], gsub('-', '_', my.genes[i]),sep = ':')) +
+  theme(
+    plot.title = element_text(size=14, face = "bold.italic"),
+    axis.title.x = element_text(size=14, face="bold", hjust = 1),
+    axis.title.y = element_text(size=14, face="bold")
+  ) + 
+  theme(legend.position = "None",
+        #legend.position = c(0.88, 0.17),
+        legend.title = element_text(colour="black", size=10, 
+                                    face="bold"),
+        legend.text = element_text(colour="black", size=10, 
+                                   face="bold")) + 
+  guides(colour = guide_legend(override.aes = list(size=2)))
 
 
+ 
+plot(g)
 
-plot(p)
 
+ggsave(filename='../Output/compScBdTgPb/figs/boothroyd/AP2IX-10_expr.pdf',
+       plot=g,
+       width = 6, height = 6,
+       units = "in", # other options are "in", "cm", "mm"
+       dpi = 300
+)
 
 
 
