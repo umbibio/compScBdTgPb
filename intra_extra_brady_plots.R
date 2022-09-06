@@ -229,6 +229,7 @@ p1  <- ggplot(integratred.pca.boothroyd, aes(x= -UMAP_1,y=UMAP_2)) +
 
 
 plot(p1)
+plot(p1)
 
 
 
